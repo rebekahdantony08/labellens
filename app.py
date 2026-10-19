@@ -1,6 +1,6 @@
+import os
 import streamlit as st
 from PIL import Image
-from google import genai
 
 # Page Configuration
 st.set_page_config(
@@ -10,10 +10,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Dark Glassmorphism & Modern Styling CSS
+# Custom Dark Theme & Glassmorphism Styling
 st.markdown("""
 <style>
-    /* Dark Futuristic Theme Colors */
     :root {
         --bg-color: #05070c;
         --card-bg: rgba(16, 22, 38, 0.7);
@@ -22,21 +21,18 @@ st.markdown("""
         --border-glass: rgba(255, 255, 255, 0.1);
     }
 
-    /* Main Container Styling */
     .stApp {
         background: radial-gradient(circle at 50% 10%, #0d1322 0%, #05070c 70%);
         color: #f8fafc;
         font-family: 'Inter', system-ui, -apple-system, sans-serif;
     }
 
-    /* Sidebar Customization */
     section[data-testid="stSidebar"] {
         background-color: rgba(11, 16, 29, 0.9) !important;
         border-right: 1px solid var(--border-glass);
         backdrop-filter: blur(12px);
     }
 
-    /* Hero Header Banner */
     .hero-card {
         background: var(--card-bg);
         border: 1px solid var(--border-glass);
@@ -57,7 +53,6 @@ st.markdown("""
         margin-bottom: 0.25rem;
     }
 
-    /* Metric Badges */
     .metric-card {
         background: rgba(22, 32, 50, 0.6);
         border: 1px solid var(--border-glass);
@@ -67,7 +62,6 @@ st.markdown("""
         backdrop-filter: blur(10px);
     }
 
-    /* Custom Buttons */
     .stButton > button {
         background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%) !important;
         color: #05070c !important;
@@ -107,13 +101,42 @@ with st.sidebar:
     uploaded_file = st.file_uploader("Upload Product Label Image", type=["jpg", "jpeg", "png", "webp"])
     
     st.markdown("---")
+    st.markdown("### 🔑 API Key (Optional)")
+    api_key_input = st.text_input("Enter Gemini API Key", type="password", help="Leave blank if added in Streamlit Secrets")
+    
+    st.markdown("---")
     st.markdown("### 🛡️ Analysis Focus")
-    check_additives = st.checkbox("Highlight Harmful Additives & E-Numbers", value=True)
+    check_additives = st.checkbox("Highlight Harmful Additives", value=True)
     check_allergens = st.checkbox("Flag Common Allergens", value=True)
     check_preservatives = st.checkbox("Detect Synthetic Preservatives", value=True)
     
     st.markdown("---")
-    st.caption("⚡ Powered by Gemini 2.5 Flash Vision AI")
+    st.caption("⚡ Powered by Gemini Vision AI")
+
+# --- GEMINI AI ANALYSIS FUNCTION ---
+def analyze_label_image(image, prompt, api_key=None):
+    # Determine API key source
+    key = api_key or os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY", "")
+    
+    if not key:
+        raise ValueError("Gemini API Key is missing! Please paste your API key in the sidebar.")
+
+    # Try new Google GenAI SDK first
+    try:
+        from google import genai
+        client = genai.Client(api_key=key)
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[image, prompt]
+        )
+        return response.text
+    except Exception:
+        # Fallback to legacy google-generativeai SDK
+        import google.generativeai as legacy_genai
+        legacy_genai.configure(api_key=key)
+        model = legacy_genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content([prompt, image])
+        return response.text
 
 # --- MAIN DISPLAY AREA ---
 if uploaded_file is not None:
@@ -128,43 +151,36 @@ if uploaded_file is not None:
 
     with col_analysis:
         if analyze_btn:
-            with st.spinner("🔍 Decoding molecular structure & ingredient safety profile..."):
+            with st.spinner("🔍 Analyzing ingredients with Gemini AI..."):
                 try:
-                    # Initialize Gemini Client
-                    client = genai.Client()
-                    
                     focus_points = []
                     if check_additives: focus_points.append("Harmful Additives/E-numbers")
-                    if check_allergens: focus_points.append("Potential Allergens (Milk, Soy, Wheat, Nuts, etc.)")
+                    if check_allergens: focus_points.append("Potential Allergens")
                     if check_preservatives: focus_points.append("Synthetic Preservatives")
                     
-                    focus_str = ", ".join(focus_points)
+                    focus_str = ", ".join(focus_points) if focus_points else "General Safety"
                     
                     prompt = (
-                        f"Analyze this product ingredient label image with focus on {focus_str}: \n"
-                        "1. Give an Overall Safety Score (e.g. 85/100) and Verdict (Safe / Caution / High Risk).\n"
-                        "2. List High Risk / Harmful Additives detected.\n"
-                        "3. List Potential Allergens detected.\n"
-                        "4. List Safe or Beneficial Natural Ingredients.\n"
-                        "Format cleanly with emojis, bullet points, and bold titles."
+                        f"Analyze this product ingredient label image focusing on {focus_str}:\n"
+                        "1. Safety Score (0-100) and Rating (Safe / Caution / High Risk)\n"
+                        "2. Harmful or High-Risk Additives\n"
+                        "3. Potential Allergens\n"
+                        "4. Safe/Beneficial Ingredients\n"
+                        "Use clear bullet points, emojis, and bold terms."
                     )
                     
-                    response = client.models.generate_content(
-                        model='gemini-2.5-flash',
-                        contents=[image, prompt]
-                    )
+                    result_text = analyze_label_image(image, prompt, api_key=api_key_input)
                     
-                    st.success("✅ Analysis Complete")
+                    st.success("✅ Analysis Complete!")
                     st.markdown("---")
-                    st.markdown(response.text)
+                    st.markdown(result_text)
                     
                 except Exception as e:
-                    st.error(f"Analysis Error: {e}")
+                    st.error(f"⚠️ {str(e)}")
         else:
             st.info("👈 Click **'Run AI Safety Analysis'** to evaluate ingredients.")
 
 else:
-    # Dashboard Features Overview Cards when no image is uploaded
     m1, m2, m3 = st.columns(3)
     with m1:
         st.markdown("""
