@@ -115,13 +115,11 @@ with st.sidebar:
 
 # --- GEMINI AI ANALYSIS FUNCTION ---
 def analyze_label_image(image, prompt, api_key=None):
-    # Determine API key source
     key = api_key or os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY", "")
     
     if not key:
-        raise ValueError("Gemini API Key is missing! Please paste your API key in the sidebar.")
+        raise ValueError("Gemini API Key is missing! Please paste your API key in the sidebar or Streamlit secrets.")
 
-    # Try new Google GenAI SDK first
     try:
         from google import genai
         client = genai.Client(api_key=key)
@@ -131,7 +129,6 @@ def analyze_label_image(image, prompt, api_key=None):
         )
         return response.text
     except Exception:
-        # Fallback to legacy google-generativeai SDK
         import google.generativeai as legacy_genai
         legacy_genai.configure(api_key=key)
         model = legacy_genai.GenerativeModel('gemini-1.5-flash')
