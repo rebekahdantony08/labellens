@@ -101,39 +101,37 @@ with st.sidebar:
     uploaded_file = st.file_uploader("Upload Product Label Image", type=["jpg", "jpeg", "png", "webp"])
     
     st.markdown("---")
-    st.markdown("### 🔑 API Key (Optional)")
-    api_key_input = st.text_input("Enter Gemini API Key", type="password", help="Leave blank if added in Streamlit Secrets")
-    
-    st.markdown("---")
     st.markdown("### 🛡️ Analysis Focus")
     check_additives = st.checkbox("Highlight Harmful Additives", value=True)
     check_allergens = st.checkbox("Flag Common Allergens", value=True)
     check_preservatives = st.checkbox("Detect Synthetic Preservatives", value=True)
     
     st.markdown("---")
-    st.caption("⚡ Powered by Gemini Vision AI")
+    st.caption("⚡ Powered by Gemini 2.5 Flash Vision AI")
 
-# --- GEMINI AI ANALYSIS FUNCTION ---
-def analyze_label_image(image, prompt, api_key=None):
-    key = api_key or os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY", "")
+# --- AUTOMATIC GEMINI AI INITIALIZATION ---
+def get_gemini_client():
+    api_key = None
+    try:
+        if "GEMINI_API_KEY" in st.secrets:
+            api_key = st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        pass
     
-    if not key:
-        raise ValueError("Gemini API Key is missing! Please paste your API key in the sidebar or Streamlit secrets.")
+    if not api_key:
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+
+    if not api_key:
+        st.error("⚠️ Gemini API Key is missing in Streamlit Secrets! Please add it in your app settings.")
+        st.stop()
 
     try:
         from google import genai
-        client = genai.Client(api_key=key)
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[image, prompt]
-        )
-        return response.text
+        return genai.Client(api_key=api_key), "v2"
     except Exception:
         import google.generativeai as legacy_genai
-        legacy_genai.configure(api_key=key)
-        model = legacy_genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content([prompt, image])
-        return response.text
+        legacy_genai.configure(api_key=api_key)
+        return legacy_genai, "legacy"
 
 # --- MAIN DISPLAY AREA ---
 if uploaded_file is not None:
@@ -166,14 +164,25 @@ if uploaded_file is not None:
                         "Use clear bullet points, emojis, and bold terms."
                     )
                     
-                    result_text = analyze_label_image(image, prompt, api_key=api_key_input)
+                    client, sdk_version = get_gemini_client()
+                    
+                    if sdk_version == "v2":
+                        response = client.models.generate_content(
+                            model='gemini-2.5-flash',
+                            contents=[image, prompt]
+                        )
+                        result_text = response.text
+                    else:
+                        model = client.GenerativeModel('gemini-1.5-flash')
+                        response = model.generate_content([prompt, image])
+                        result_text = response.text
                     
                     st.success("✅ Analysis Complete!")
                     st.markdown("---")
                     st.markdown(result_text)
                     
                 except Exception as e:
-                    st.error(f"⚠️ {str(e)}")
+                    st.error(f"⚠️ Analysis Error: {str(e)}")
         else:
             st.info("👈 Click **'Run AI Safety Analysis'** to evaluate ingredients.")
 
