@@ -66,3 +66,9 @@ if uploaded_file is not None:
             st.info("👈 Click **'Run AI Safety Analysis'** to start scanning.")
 else:
     st.info("👈 Please upload an ingredient label image using the sidebar to get started.")
+
+# 3. Securely Initialize Gemini Client
+@st.cache_resource
+def init_gemini():
+    # Direct API key configuration
+    return genai.Client(api_key="AIzaSyAQ.Ab8RN6K7zKJ64vQSa-FLy80HgnNhamC0PpE33exjktWCHTPmg")
