@@ -1,61 +1,68 @@
 import streamlit as st
-from google import genai
 from PIL import Image
+from google import genai
 
-# Page Configuration
-st.set_page_config(page_title="LabelLens", page_icon="🔍", layout="centered")
+# 1. Page Setup
+st.set_page_config(
+    page_title="LabelLens AI", 
+    page_icon="🔍", 
+    layout="wide"
+)
 
-st.title("🔍 LabelLens — Ingredient Safety Advisor")
-st.write("Instantly analyze product ingredient labels for health risks, toxins, and allergens.")
+st.title("🔍 LabelLens AI")
+st.write("Next-Generation Visual AI Ingredient Safety & Health Advisor")
 
-# Sidebar for API Key input
-st.sidebar.header("Configuration")
-api_key = st.sidebar.text_input("Enter Gemini API Key", type="password")
+# 2. Sidebar File Uploader
+st.sidebar.markdown("### ⚙️ Scanner & Settings")
+uploaded_file = st.sidebar.file_uploader("Upload Product Label", type=["jpg", "jpeg", "png", "webp"])
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("**How to use:**\n1. Enter your Gemini API Key.\n2. Upload a photo of an ingredient label.\n3. Click Analyze!")
+# 3. Securely Load Gemini Client using Streamlit Secrets
+@st.cache_resource
+def init_gemini():
+    # This automatically reads the key you saved in Streamlit Cloud Secrets!
+    api_key = st.secrets["GEMINI_API_KEY"]
+    return genai.Client(api_key=api_key)
 
-# Main File Uploader
-uploaded_file = st.file_uploader("Upload product label image", type=["jpg", "png", "jpeg"])
-
+# 4. Main App Logic
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Label", use_column_width=True)
     
-    if st.button("🚀 Analyze Ingredients"):
-        if not api_key:
-            st.error("⚠️ Please enter your Gemini API Key in the sidebar first!")
-        else:
-            with st.spinner("Analyzing product label with AI..."):
+    col1, col2 = st.columns(2, gap="medium")
+    
+    with col1:
+        st.markdown("#### 📸 Label Preview")
+        st.image(image, use_container_width=True)
+        analyze_btn = st.button("⚡ Run AI Safety Analysis", type="primary")
+        
+    with col2:
+        st.markdown("#### 📊 Analysis Results")
+        if analyze_btn:
+            with st.spinner("🔍 Reading ingredients with Gemini AI..."):
                 try:
-                    # Initialize Gemini Client
-                    client = genai.Client(api_key=api_key)
+                    client = init_gemini()
                     
-                    # Structured Prompt for the AI
-                    prompt = """
-                    Analyze this product ingredient label image. 
-                    Provide your response in clear markdown with these exact sections:
-                    ### 📊 Overall Safety Score
-                    (Give a score out of 100 and a rating like Safe / Moderate Caution / High Risk)
+                    prompt = (
+                        "Analyze this product ingredient label image:\n"
+                        "1. Safety Score (0-100) and Rating (Safe / Caution / High Risk)\n"
+                        "2. Harmful or High-Risk Additives / E-numbers\n"
+                        "3. Potential Allergens\n"
+                        "4. Safe/Beneficial Ingredients\n"
+                        "Use clear bullet points, emojis, and bold terms."
+                    )
                     
-                    ### ⚠️ Flagged / Harmful Ingredients
-                    (List any toxins, harsh chemicals, or questionable preservatives with a 1-sentence explanation each)
-                    
-                    ### 🌾 Potential Allergens Detected
-                    (Check for gluten, dairy, nuts, soy, parabens, etc.)
-                    
-                    ### ✅ Safe Ingredients
-                    (List the safe or natural components found)
-                    """
-                    
-                    # Generate response using Gemini 2.5 Flash
+                    # Call Gemini 2.5 Flash with the image and prompt
                     response = client.models.generate_content(
-                        model="gemini-2.5-flash",
+                        model='gemini-2.5-flash',
                         contents=[image, prompt]
                     )
                     
-                    st.success("Analysis Complete!")
+                    st.success("✅ Analysis Complete!")
+                    st.markdown("---")
                     st.markdown(response.text)
                     
                 except Exception as e:
-                    st.error(f"An error occurred: {e}")
+                    st.error(f"⚠️ Error during analysis: {e}")
+        else:
+            st.info("👈 Click **'Run AI Safety Analysis'** to start scanning.")
+else:
+    st.info("👈 Please upload an ingredient label image using the sidebar to get started.")
